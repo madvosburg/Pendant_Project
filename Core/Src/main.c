@@ -59,20 +59,16 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint8_t TxData[2];
+uint8_t TxData[2] = {0};
 uint8_t RxData[2];
 uint32_t previousMillis = 0;
 uint32_t currentMillis = 0;
+int i = 0;
 
 void sendData (uint8_t *data)
 {
 	HAL_UART_Transmit(&huart1, data, 1, 1000);
 }
-
-//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
-//{
-//	HAL_UARTEx_ReceiveToIdle_IT(&huart1, RxData, 2);
-//}
 
 /* USER CODE END 0 */
 
@@ -108,7 +104,6 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
-//  HAL_UARTEx_ReceiveToIdle_IT(&huart1, RxData, 2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -116,7 +111,11 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+	  for(i=5; i<100; i++){
+		  TxData[0] = i;
+		  sendData(TxData);
+		  HAL_Delay(900);
+	  }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -292,37 +291,37 @@ static void MX_GPIO_Init(void)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   currentMillis = HAL_GetTick();
-  if (GPIO_Pin == GPIO_PIN_2 && (currentMillis - previousMillis > 50))
+  if (GPIO_Pin == GPIO_PIN_2 && (currentMillis - previousMillis > 70))
   {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
     TxData[0] = 1;
     sendData(TxData);
     previousMillis = currentMillis;
-    TxData[0] = 0;
+   // TxData[0] = 0;
   }
-  if (GPIO_Pin == GPIO_PIN_3 && (currentMillis - previousMillis > 50))
+  if (GPIO_Pin == GPIO_PIN_3 && (currentMillis - previousMillis > 70))
   {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
     TxData[0] = 2;
     sendData(TxData);
     previousMillis = currentMillis;
-    TxData[0] = 0;
+  //  TxData[0] = 0;
   }
-  if (GPIO_Pin == GPIO_PIN_14 && (currentMillis - previousMillis > 50))
+  if (GPIO_Pin == GPIO_PIN_14 && (currentMillis - previousMillis > 70))
   {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
     TxData[0] = 3;
     sendData(TxData);
     previousMillis = currentMillis;
-    TxData[0] = 0;
+   // TxData[0] = 0;
   }
-  if (GPIO_Pin == GPIO_PIN_15 && (currentMillis - previousMillis > 50))
+  if (GPIO_Pin == GPIO_PIN_15 && (currentMillis - previousMillis > 70))
   {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
     TxData[0] = 4;
     sendData(TxData);
     previousMillis = currentMillis;
-    TxData[0] = 0;
+  //  TxData[0] = 0;
   }
 }
 /* USER CODE END 4 */
