@@ -41,6 +41,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim16;
+
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
@@ -53,21 +55,22 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint8_t TxData[2] = {0};
-uint8_t RxData[2];
+volatile uint8_t TxData[2] = {0};
+volatile uint8_t RxData[2] = {0};
 uint32_t previousMillis = 0;
 uint32_t currentMillis = 0;
-int i = 0;
+int flag = 0;
 
-void sendData (uint8_t *data)
+void sendData (volatile uint8_t *data)
 {
-	HAL_UART_Transmit(&huart1, data, 1, 1000);
+	HAL_UART_Transmit(&huart1, (uint8_t*)data, 1, 1000);
 }
 
 /* USER CODE END 0 */
@@ -102,6 +105,7 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -111,10 +115,35 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  for(i=5; i<100; i++){
-		  TxData[0] = i;
-		  sendData(TxData);
-		  HAL_Delay(900);
+	  sendData(TxData);
+	  HAL_Delay(10);
+	  if (flag == 1 && (currentMillis - previousMillis > 20))
+	  {
+	    TxData[0] = 1;
+	    sendData(TxData);
+	    previousMillis = currentMillis;
+	    TxData[0] = 0;
+	  }
+	  if (flag == 2 && (currentMillis - previousMillis > 20))
+	  {
+	    TxData[0] = 2;
+	    sendData(TxData);
+	    previousMillis = currentMillis;
+	    TxData[0] = 0;
+	  }
+	 if (flag == 3 && (currentMillis - previousMillis > 20))
+	 {
+	    TxData[0] = 3;
+	    sendData(TxData);
+	    previousMillis = currentMillis;
+	    TxData[0] = 0;
+	  }
+	  if (flag == 4 && (currentMillis - previousMillis > 20))
+	  {
+	    TxData[0] = 4;
+	    sendData(TxData);
+	    previousMillis = currentMillis;
+	    TxData[0] = 0;
 	  }
     /* USER CODE BEGIN 3 */
   }
@@ -156,13 +185,47 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_USART2;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_USART2
+                              |RCC_PERIPHCLK_TIM16;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
+  PeriphClkInit.Tim16ClockSelection = RCC_TIM16CLK_HCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM16 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM16_Init(void)
+{
+
+  /* USER CODE BEGIN TIM16_Init 0 */
+
+  /* USER CODE END TIM16_Init 0 */
+
+  /* USER CODE BEGIN TIM16_Init 1 */
+
+  /* USER CODE END TIM16_Init 1 */
+  htim16.Instance = TIM16;
+  htim16.Init.Prescaler = 79;
+  htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim16.Init.Period = 65535;
+  htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim16.Init.RepetitionCounter = 0;
+  htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM16_Init 2 */
+
+  /* USER CODE END TIM16_Init 2 */
+
 }
 
 /**
@@ -251,9 +314,6 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(TX_EN_GPIO_Port, TX_EN_Pin, GPIO_PIN_RESET);
-
   /*Configure GPIO pins : PC2 PC3 */
   GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
@@ -265,13 +325,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : TX_EN_Pin */
-  GPIO_InitStruct.Pin = TX_EN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(TX_EN_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI2_TSC_IRQn, 0, 0);
@@ -290,39 +343,22 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+	  UNUSED(GPIO_Pin);
+
   currentMillis = HAL_GetTick();
-  if (GPIO_Pin == GPIO_PIN_2 && (currentMillis - previousMillis > 70))
-  {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
-    TxData[0] = 1;
-    sendData(TxData);
-    previousMillis = currentMillis;
-   // TxData[0] = 0;
+  if (GPIO_Pin == GPIO_PIN_2){
+	  flag = 1;
   }
-  if (GPIO_Pin == GPIO_PIN_3 && (currentMillis - previousMillis > 70))
-  {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
-    TxData[0] = 2;
-    sendData(TxData);
-    previousMillis = currentMillis;
-  //  TxData[0] = 0;
+  if (GPIO_Pin == GPIO_PIN_3){
+	  flag = 2;
   }
-  if (GPIO_Pin == GPIO_PIN_14 && (currentMillis - previousMillis > 70))
-  {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
-    TxData[0] = 3;
-    sendData(TxData);
-    previousMillis = currentMillis;
-   // TxData[0] = 0;
+  if (GPIO_Pin == GPIO_PIN_14){
+	  flag = 3;
   }
-  if (GPIO_Pin == GPIO_PIN_15 && (currentMillis - previousMillis > 70))
-  {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
-    TxData[0] = 4;
-    sendData(TxData);
-    previousMillis = currentMillis;
-  //  TxData[0] = 0;
+  if (GPIO_Pin == GPIO_PIN_15){
+	  flag = 4;
   }
+
 }
 /* USER CODE END 4 */
 
