@@ -61,16 +61,18 @@ static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN 0 */
 uint8_t TxData[2];
 uint8_t RxData[2];
+uint32_t previousMillis = 0;
+uint32_t currentMillis = 0;
 
 void sendData (uint8_t *data)
 {
 	HAL_UART_Transmit(&huart1, data, 1, 1000);
 }
 
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
-{
-	HAL_UARTEx_ReceiveToIdle_IT(&huart1, RxData, 2);
-}
+//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+//{
+//	HAL_UARTEx_ReceiveToIdle_IT(&huart1, RxData, 2);
+//}
 
 /* USER CODE END 0 */
 
@@ -106,7 +108,7 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_UARTEx_ReceiveToIdle_IT(&huart1, RxData, 2);
+//  HAL_UARTEx_ReceiveToIdle_IT(&huart1, RxData, 2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -114,25 +116,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == GPIO_PIN_RESET){	//Check for red button press
-	 		  TxData[0] = 1;
-	 		  sendData(TxData);
-	 		  HAL_Delay(500);
-	 	 }else if(HAL_GPIO_ReadPin(GPIOC,GPIO_PIN_3) == GPIO_PIN_RESET){ 	//Check for green button press
-	 		  TxData[0] = 2;
-	 		  sendData(TxData);
-	 		  HAL_Delay(500);
-	 	 }else if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_14) == GPIO_PIN_RESET){ 	//Check for yellow button press
-	 		  TxData[0] = 3;
-	 		  sendData(TxData);
-	 		  HAL_Delay(500);
-	 	 }else if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_15) == GPIO_PIN_RESET){ 	//Check for blue button press
-	 		  TxData[0] = 4;
-	 		  sendData(TxData);
-	 	      HAL_Delay(500);
-	 	 }else{
-	 		  TxData[0] = 0;
-	 	 }
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -273,13 +257,13 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : PC2 PC3 */
   GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB14 PB15 */
   GPIO_InitStruct.Pin = GPIO_PIN_14|GPIO_PIN_15;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
@@ -290,12 +274,57 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(TX_EN_GPIO_Port, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI2_TSC_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI2_TSC_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI3_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  currentMillis = HAL_GetTick();
+  if (GPIO_Pin == GPIO_PIN_2 && (currentMillis - previousMillis > 50))
+  {
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
+    TxData[0] = 1;
+    sendData(TxData);
+    previousMillis = currentMillis;
+    TxData[0] = 0;
+  }
+  if (GPIO_Pin == GPIO_PIN_3 && (currentMillis - previousMillis > 50))
+  {
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
+    TxData[0] = 2;
+    sendData(TxData);
+    previousMillis = currentMillis;
+    TxData[0] = 0;
+  }
+  if (GPIO_Pin == GPIO_PIN_14 && (currentMillis - previousMillis > 50))
+  {
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
+    TxData[0] = 3;
+    sendData(TxData);
+    previousMillis = currentMillis;
+    TxData[0] = 0;
+  }
+  if (GPIO_Pin == GPIO_PIN_15 && (currentMillis - previousMillis > 50))
+  {
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
+    TxData[0] = 4;
+    sendData(TxData);
+    previousMillis = currentMillis;
+    TxData[0] = 0;
+  }
+}
 /* USER CODE END 4 */
 
 /**
