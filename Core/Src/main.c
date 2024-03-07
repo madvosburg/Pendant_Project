@@ -41,6 +41,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+CRC_HandleTypeDef hcrc;
+
 TIM_HandleTypeDef htim16;
 
 UART_HandleTypeDef huart1;
@@ -56,6 +58,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM16_Init(void);
+static void MX_CRC_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -67,6 +70,8 @@ volatile uint8_t RxData[2] = {0};
 uint32_t previousMillis = 0;
 uint32_t currentMillis = 0;
 int flag = 0;
+GPIO_PinState state;
+//uint16_t crc;
 
 void sendData (volatile uint8_t *data)
 {
@@ -106,6 +111,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   MX_TIM16_Init();
+  MX_CRC_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -116,35 +122,35 @@ int main(void)
   {
     /* USER CODE END WHILE */
 	  sendData(TxData);
-	  HAL_Delay(10);
-	  if (flag == 1 && (currentMillis - previousMillis > 20))
-	  {
-	    TxData[0] = 1;
-	    sendData(TxData);
-	    previousMillis = currentMillis;
-	    TxData[0] = 0;
-	  }
-	  if (flag == 2 && (currentMillis - previousMillis > 20))
-	  {
-	    TxData[0] = 2;
-	    sendData(TxData);
-	    previousMillis = currentMillis;
-	    TxData[0] = 0;
-	  }
-	 if (flag == 3 && (currentMillis - previousMillis > 20))
-	 {
-	    TxData[0] = 3;
-	    sendData(TxData);
-	    previousMillis = currentMillis;
-	    TxData[0] = 0;
-	  }
-	  if (flag == 4 && (currentMillis - previousMillis > 20))
-	  {
-	    TxData[0] = 4;
-	    sendData(TxData);
-	    previousMillis = currentMillis;
-	    TxData[0] = 0;
-	  }
+		  HAL_Delay(10);
+		  if (flag == 1)
+		  {
+		    TxData[0] = 1;
+		    sendData(TxData);
+		    TxData[0] = 0;
+		    flag = 0;
+		  }
+		  if (flag == 2)
+		  {
+		    TxData[0] = 2;
+		    sendData(TxData);
+		    TxData[0] = 0;
+		    flag = 0;
+		  }
+		 if (flag == 3)
+		 {
+		    TxData[0] = 3;
+		    sendData(TxData);
+		    TxData[0] = 0;
+		    flag = 0;
+		  }
+		  if (flag == 4)
+		  {
+		    TxData[0] = 4;
+		    sendData(TxData);
+		    TxData[0] = 0;
+		    flag = 0;
+		  }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -197,6 +203,37 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief CRC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CRC_Init(void)
+{
+
+  /* USER CODE BEGIN CRC_Init 0 */
+
+  /* USER CODE END CRC_Init 0 */
+
+  /* USER CODE BEGIN CRC_Init 1 */
+
+  /* USER CODE END CRC_Init 1 */
+  hcrc.Instance = CRC;
+  hcrc.Init.DefaultPolynomialUse = DEFAULT_POLYNOMIAL_ENABLE;
+  hcrc.Init.DefaultInitValueUse = DEFAULT_INIT_VALUE_ENABLE;
+  hcrc.Init.InputDataInversionMode = CRC_INPUTDATA_INVERSION_NONE;
+  hcrc.Init.OutputDataInversionMode = CRC_OUTPUTDATA_INVERSION_DISABLE;
+  hcrc.InputDataFormat = CRC_INPUTDATA_FORMAT_BYTES;
+  if (HAL_CRC_Init(&hcrc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CRC_Init 2 */
+
+  /* USER CODE END CRC_Init 2 */
+
+}
+
+/**
   * @brief TIM16 Initialization Function
   * @param None
   * @retval None
@@ -212,9 +249,9 @@ static void MX_TIM16_Init(void)
 
   /* USER CODE END TIM16_Init 1 */
   htim16.Instance = TIM16;
-  htim16.Init.Prescaler = 79;
+  htim16.Init.Prescaler = 19;
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 65535;
+  htim16.Init.Period = 41999;
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim16.Init.RepetitionCounter = 0;
   htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -345,21 +382,46 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	  UNUSED(GPIO_Pin);
 
-  currentMillis = HAL_GetTick();
   if (GPIO_Pin == GPIO_PIN_2){
-	  flag = 1;
+	  state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2);
+	  flag = 5;
   }
   if (GPIO_Pin == GPIO_PIN_3){
-	  flag = 2;
+	  state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3);
+	  flag = 6;
   }
   if (GPIO_Pin == GPIO_PIN_14){
-	  flag = 3;
+	  state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14);
+	  flag = 7;
   }
   if (GPIO_Pin == GPIO_PIN_15){
-	  flag = 4;
+	  state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15);
+	  flag = 8;
   }
+  HAL_TIM_Base_Start_IT(&htim16);
 
 }
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	 UNUSED(htim);
+
+	if(htim == &htim16){
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == state && flag == 5){
+			flag = 1;
+		}
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == state && flag == 6){
+			flag = 2;
+		}
+		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == state && flag == 7){
+			flag = 3;
+		}
+		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == state && flag ==8){
+			flag = 4;
+		}
+	}
+	HAL_TIM_Base_Stop_IT(&htim16);
+}
+
 /* USER CODE END 4 */
 
 /**
