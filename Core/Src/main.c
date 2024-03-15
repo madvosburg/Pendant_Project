@@ -152,7 +152,7 @@ int main(void)
 	 			 		  {
 	 			 		    TxData[0] = 1;
 	 			 		    sendData(TxData);
-	 			 		  //  TxData[0] = 0;
+	 			 		    TxData[0] = 0;
 	 			 		  //  led = RESET_L;
 	 			 		    bit &= ~(1 << 0);
 	 			 		  }
@@ -161,7 +161,7 @@ int main(void)
 	 			 		  {
 	 			 		   TxData[0] = 2;
 	 			 		    sendData(TxData);
-	 			 		   // TxData[0] = 0;
+	 			 		    TxData[0] = 0;
 	 			 		  //  led = RESET_L;
 	 			 		    bit &= ~(1 << 1);
 	 			 		  }
@@ -170,7 +170,7 @@ int main(void)
 	 			 		 {
 	 			 		    TxData[0] = 3;
 	 			 		    sendData(TxData);
-	 			 		   // TxData[0] = 0;
+	 			 		    TxData[0] = 0;
 	 			 		  //  led = RESET_L;
 	 			 		    bit &= ~(1 << 2);
 	 			 		  }
@@ -179,7 +179,7 @@ int main(void)
 	 			 		  {
 	 			 		    TxData[0] = 4;
 	 			 		    sendData(TxData);
-	 			 		   // TxData[0] = 0;
+	 			 		    TxData[0] = 0;
 	 			 		   // led = RESET_L;
 	 			 		    bit &= ~(1 << 3);
 	 			 		  }
