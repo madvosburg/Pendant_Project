@@ -97,7 +97,7 @@ void bitmask_clear(uint32_t bit_position){
 	 bit &= ~(1 << bit_position);
 }
 
-int bitmask_check(uint32_t bit_position){
+uint8_t bitmask_check(uint32_t bit_position){
 	if(bit & (1 << bit_position)){
 		return 1;
 	}else{
