@@ -66,8 +66,7 @@ static void MX_CRC_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-//volatile uint8_t TxData[2] = {0};
-volatile uint32_t TxData[3];
+uint32_t TxData[3];
 uint32_t bit = 0;
 
 typedef enum{
@@ -79,29 +78,32 @@ typedef enum{
   NONE_B
 }button_state;
 
-//typedef enum{
-//	YELLOW_L,
-//	BLUE_L,
-//	GREEN_L,
-//	RED_L,
-//	RESET_L
-//}LED_state;
-
 button_state button = NONE_B;
-//LED_state led = RESET_L;
 GPIO_PinState state;
-//uint16_t crc;
 
 
-void sendData (volatile uint32_t *data)
-{
-	//TxData[1] = HAL_CRC_Calculate(&hcrc, (uint32_t*)TxData[0], 3);
-	TxData[1] = HAL_CRC_Calculate(&hcrc, (uint32_t*)TxData, 3);
-	data[1] = TxData[1];
+void sendData(){
+	TxData[1] = HAL_CRC_Calculate(&hcrc, (uint32_t*)TxData[0], sizeof(TxData[0]));
+	//TxData[1] = HAL_CRC_Calculate(&hcrc, (uint32_t*)TxData, sizeof(TxData));
 	HAL_Delay(10);
-	HAL_UART_Transmit(&huart1, (uint8_t*)data, sizeof(data), 1000);
+	HAL_UART_Transmit(&huart1, (uint8_t*)TxData, sizeof(TxData), 1000);
 }
 
+void bitmask_set(uint32_t bit_position){
+	bit |= (1 << bit_position);
+}
+
+void bitmask_clear(uint32_t bit_position){
+	 bit &= ~(1 << bit_position);
+}
+
+int bitmask_check(uint32_t bit_position){
+	if(bit & (1 << bit_position)){
+		return 1;
+	}else{
+		return 0;
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -146,42 +148,34 @@ int main(void)
   {
     /* USER CODE END WHILE */
 
-	 			  sendData(TxData);
-	 			 		 // if (led == RED_L)
-	 			  	  	  if(bit & (1 << 0))
+	 			  sendData();
+	 			  	  	  if(bitmask_check(0)) //red
 	 			 		  {
 	 			 		    TxData[0] = 1;
-	 			 		    sendData(TxData);
-	 			 		  //  TxData[0] = 0;
-	 			 		  //  led = RESET_L;
-	 			 		    bit &= ~(1 << 0);
+	 			 		    sendData();
+	 			 		    TxData[0] = 0;
+	 			 		     bitmask_clear(0);
 	 			 		  }
-	 			 		 // if (led == GREEN_L)
-	 			  	  	  if(bit & (1 << 1))
+	 			  	  	  if(bitmask_check(1)) //green
 	 			 		  {
 	 			 		   TxData[0] = 2;
-	 			 		    sendData(TxData);
-	 			 		   // TxData[0] = 0;
-	 			 		  //  led = RESET_L;
-	 			 		    bit &= ~(1 << 1);
+	 			 		    sendData();
+	 			 		    TxData[0] = 0;
+	 			 		      bitmask_clear(1);
 	 			 		  }
-	 			 		// if (led == YELLOW_L)
-	 			  	  	  if(bit & (1 << 2))
+	 			  	  	  if(bitmask_check(2)) //yellow
 	 			 		 {
 	 			 		    TxData[0] = 3;
-	 			 		    sendData(TxData);
-	 			 		   // TxData[0] = 0;
-	 			 		  //  led = RESET_L;
-	 			 		    bit &= ~(1 << 2);
+	 			 		    sendData();
+	 			 		    TxData[0] = 0;
+	 			 		    bitmask_clear(2);
 	 			 		  }
-	 			  	  	  if(bit & (1 << 3))
-	 			  	   // if (led == BLUE_L)
+	 			  	    	if(bitmask_check(3)) //blue
 	 			 		  {
 	 			 		    TxData[0] = 4;
-	 			 		    sendData(TxData);
-	 			 		   // TxData[0] = 0;
-	 			 		   // led = RESET_L;
-	 			 		    bit &= ~(1 << 3);
+	 			 		    sendData();
+	 			 		    TxData[0] = 0;
+	 			 		    bitmask_clear(3);
 	 			 		  }
 
     /* USER CODE BEGIN 3 */
@@ -420,19 +414,19 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
   if (GPIO_Pin == GPIO_PIN_2){
 	  state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2);
-	  button = BUTTON_1;
+	  button = BUTTON_1;	//red
   }
   if (GPIO_Pin == GPIO_PIN_3){
 	  state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3);
-	  button = BUTTON_2;
+	  button = BUTTON_2;	//green
   }
   if (GPIO_Pin == GPIO_PIN_14){
 	  state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14);
-	  button = BUTTON_3;
+	  button = BUTTON_3;	//yellow
   }
   if (GPIO_Pin == GPIO_PIN_15){
 	  state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15);
-	  button = BUTTON_4;
+	  button = BUTTON_4;	//blue
   }
   HAL_TIM_Base_Start_IT(&htim16);
 
@@ -443,20 +437,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 	if(htim == &htim16){
 		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == state && button == BUTTON_1){
-			//led = RED_L;
-			bit |= (1 << 0);
+			bitmask_set(0);
 		}
 		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == state && button == BUTTON_2){
-			//led = GREEN_L;
-			bit |= (1 << 1);
+			bitmask_set(1);
 		}
 		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == state && button == BUTTON_3){
-			//led = YELLOW_L;
-			bit |= (1 << 2);
+			bitmask_set(2);
 		}
 		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == state && button == BUTTON_4){
-			//led = BLUE_L;
-			bit |= (1 << 3);
+			bitmask_set(3);
 		}
 	}
 	HAL_TIM_Base_Stop_IT(&htim16);
