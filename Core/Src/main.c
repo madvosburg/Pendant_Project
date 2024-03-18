@@ -155,6 +155,7 @@ int main(void)
 	 			 		    sendData();
 	 			 		    TxData[0] = 0;
 	 			 		     bitmask_clear(0);
+
 	 			 		  }
 	 			  	  	  if(bitmask_check(1)) //green
 	 			 		  {
