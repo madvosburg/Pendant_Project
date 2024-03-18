@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "string.h"
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,17 +66,40 @@ static void MX_CRC_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-volatile uint8_t TxData[2] = {0};
-volatile uint8_t RxData[2] = {0};
-uint32_t previousMillis = 0;
-uint32_t currentMillis = 0;
-int flag = 0;
+//volatile uint8_t TxData[2] = {0};
+volatile uint32_t TxData[3];
+uint32_t bit = 0;
+
+typedef enum{
+  BUTTON_1,
+  BUTTON_2,
+  BUTTON_3,
+  BUTTON_4,
+  //could track up to 32 buttons
+  NONE_B
+}button_state;
+
+//typedef enum{
+//	YELLOW_L,
+//	BLUE_L,
+//	GREEN_L,
+//	RED_L,
+//	RESET_L
+//}LED_state;
+
+button_state button = NONE_B;
+//LED_state led = RESET_L;
 GPIO_PinState state;
 //uint16_t crc;
 
-void sendData (volatile uint8_t *data)
+
+void sendData (volatile uint32_t *data)
 {
-	HAL_UART_Transmit(&huart1, (uint8_t*)data, 1, 1000);
+	//TxData[1] = HAL_CRC_Calculate(&hcrc, (uint32_t*)TxData[0], 3);
+	TxData[1] = HAL_CRC_Calculate(&hcrc, (uint32_t*)TxData, 3);
+	data[1] = TxData[1];
+	HAL_Delay(10);
+	HAL_UART_Transmit(&huart1, (uint8_t*)data, sizeof(data), 1000);
 }
 
 /* USER CODE END 0 */
@@ -121,36 +145,45 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  sendData(TxData);
-		  HAL_Delay(10);
-		  if (flag == 1)
-		  {
-		    TxData[0] = 1;
-		    sendData(TxData);
-		    TxData[0] = 0;
-		    flag = 0;
-		  }
-		  if (flag == 2)
-		  {
-		    TxData[0] = 2;
-		    sendData(TxData);
-		    TxData[0] = 0;
-		    flag = 0;
-		  }
-		 if (flag == 3)
-		 {
-		    TxData[0] = 3;
-		    sendData(TxData);
-		    TxData[0] = 0;
-		    flag = 0;
-		  }
-		  if (flag == 4)
-		  {
-		    TxData[0] = 4;
-		    sendData(TxData);
-		    TxData[0] = 0;
-		    flag = 0;
-		  }
+
+	 			  sendData(TxData);
+	 			 		 // if (led == RED_L)
+	 			  	  	  if(bit & (1 << 0))
+	 			 		  {
+	 			 		    TxData[0] = 1;
+	 			 		    sendData(TxData);
+	 			 		    TxData[0] = 0;
+	 			 		  //  led = RESET_L;
+	 			 		    bit &= ~(1 << 0);
+	 			 		  }
+	 			 		 // if (led == GREEN_L)
+	 			  	  	  if(bit & (1 << 1))
+	 			 		  {
+	 			 		   TxData[0] = 2;
+	 			 		    sendData(TxData);
+	 			 		    TxData[0] = 0;
+	 			 		  //  led = RESET_L;
+	 			 		    bit &= ~(1 << 1);
+	 			 		  }
+	 			 		// if (led == YELLOW_L)
+	 			  	  	  if(bit & (1 << 2))
+	 			 		 {
+	 			 		    TxData[0] = 3;
+	 			 		    sendData(TxData);
+	 			 		    TxData[0] = 0;
+	 			 		  //  led = RESET_L;
+	 			 		    bit &= ~(1 << 2);
+	 			 		  }
+	 			  	  	  if(bit & (1 << 3))
+	 			  	   // if (led == BLUE_L)
+	 			 		  {
+	 			 		    TxData[0] = 4;
+	 			 		    sendData(TxData);
+	 			 		    TxData[0] = 0;
+	 			 		   // led = RESET_L;
+	 			 		    bit &= ~(1 << 3);
+	 			 		  }
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -218,8 +251,11 @@ static void MX_CRC_Init(void)
 
   /* USER CODE END CRC_Init 1 */
   hcrc.Instance = CRC;
-  hcrc.Init.DefaultPolynomialUse = DEFAULT_POLYNOMIAL_ENABLE;
-  hcrc.Init.DefaultInitValueUse = DEFAULT_INIT_VALUE_ENABLE;
+  hcrc.Init.DefaultPolynomialUse = DEFAULT_POLYNOMIAL_DISABLE;
+  hcrc.Init.DefaultInitValueUse = DEFAULT_INIT_VALUE_DISABLE;
+  hcrc.Init.GeneratingPolynomial = 7;
+  hcrc.Init.CRCLength = CRC_POLYLENGTH_8B;
+  hcrc.Init.InitValue = 0;
   hcrc.Init.InputDataInversionMode = CRC_INPUTDATA_INVERSION_NONE;
   hcrc.Init.OutputDataInversionMode = CRC_OUTPUTDATA_INVERSION_DISABLE;
   hcrc.InputDataFormat = CRC_INPUTDATA_FORMAT_BYTES;
@@ -238,7 +274,7 @@ static void MX_CRC_Init(void)
   * @param None
   * @retval None
   */
-static void MX_TIM16_Init(void)
+static void MX_TIM16_Init(void)			//	20ms trigger
 {
 
   /* USER CODE BEGIN TIM16_Init 0 */
@@ -249,9 +285,9 @@ static void MX_TIM16_Init(void)
 
   /* USER CODE END TIM16_Init 1 */
   htim16.Instance = TIM16;
-  htim16.Init.Prescaler = 19;
+  htim16.Init.Prescaler = 1599;						//	f = 8MHz / PSC = 50kHz
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 41999;
+  htim16.Init.Period = 999;								//	T = (1 / f) * period = 20ms
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim16.Init.RepetitionCounter = 0;
   htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -384,19 +420,19 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
   if (GPIO_Pin == GPIO_PIN_2){
 	  state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2);
-	  flag = 5;
+	  button = BUTTON_1;
   }
   if (GPIO_Pin == GPIO_PIN_3){
 	  state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3);
-	  flag = 6;
+	  button = BUTTON_2;
   }
   if (GPIO_Pin == GPIO_PIN_14){
 	  state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14);
-	  flag = 7;
+	  button = BUTTON_3;
   }
   if (GPIO_Pin == GPIO_PIN_15){
 	  state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15);
-	  flag = 8;
+	  button = BUTTON_4;
   }
   HAL_TIM_Base_Start_IT(&htim16);
 
@@ -406,17 +442,21 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	 UNUSED(htim);
 
 	if(htim == &htim16){
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == state && flag == 5){
-			flag = 1;
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == state && button == BUTTON_1){
+			//led = RED_L;
+			bit |= (1 << 0);
 		}
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == state && flag == 6){
-			flag = 2;
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == state && button == BUTTON_2){
+			//led = GREEN_L;
+			bit |= (1 << 1);
 		}
-		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == state && flag == 7){
-			flag = 3;
+		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == state && button == BUTTON_3){
+			//led = YELLOW_L;
+			bit |= (1 << 2);
 		}
-		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == state && flag ==8){
-			flag = 4;
+		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == state && button == BUTTON_4){
+			//led = BLUE_L;
+			bit |= (1 << 3);
 		}
 	}
 	HAL_TIM_Base_Stop_IT(&htim16);
