@@ -269,6 +269,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+
 	  sendData();
 	  	  if(bitmask_check(0)) //red
 	  	  {
@@ -298,6 +299,7 @@ int main(void)
 	  		  data = 0;
 	  		  bitmask_clear(3);
 	  	  }
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
