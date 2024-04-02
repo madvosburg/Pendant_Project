@@ -21,8 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stdio.h"
-#include "string.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
 /* USER CODE END Includes */
 
@@ -66,8 +67,9 @@ static void MX_CRC_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint32_t TxData[3];
+volatile uint32_t TxData[3];
 uint32_t bit = 0;
+uint32_t data = 0;
 
 typedef enum{
   BUTTON_1,
@@ -81,29 +83,150 @@ typedef enum{
 button_state button = NONE_B;
 GPIO_PinState state;
 
+char key[] = "1101";	//edit to implement with any size key? (crc code only works for 4 numbered keys)
+char data_str[40];
+char remain[5];
+char appended_data[40];
+char result[5];
+char send_data[40];
+char tmp[10];
 
-void sendData(){
-	TxData[1] = HAL_CRC_Calculate(&hcrc, (uint32_t*)TxData[0], sizeof(TxData[0]));
-	//TxData[1] = HAL_CRC_Calculate(&hcrc, (uint32_t*)TxData, sizeof(TxData));
-	HAL_Delay(10);
-	HAL_UART_Transmit(&huart1, (uint8_t*)TxData, sizeof(TxData), 1000);
-}
-
+/**
+ * sets specific button pressed
+ */
 void bitmask_set(uint32_t bit_position){
 	bit |= (1 << bit_position);
 }
 
+/**
+ * clears specific button pressed
+ */
 void bitmask_clear(uint32_t bit_position){
 	 bit &= ~(1 << bit_position);
 }
 
-int bitmask_check(uint32_t bit_position){
+/**
+ * checks if specific button is pressed
+ */
+uint8_t bitmask_check(uint32_t bit_position){
 	if(bit & (1 << bit_position)){
 		return 1;
 	}else{
 		return 0;
 	}
 }
+
+/**
+ * XOR logic used to divide data by key
+ */
+void xor(char* str1, char* str2){
+	for(int i = 0; i < 5; i++){
+		if(str1[i] == str2[i]){
+			result[i] = '0';			//if bits are same, XOR is 0
+		}else{
+			result[i] = '1';			//if bits are different, XOR is 1
+		}
+	}
+	result[4] = '\0';
+}
+
+/**
+ * converts uint32 to string
+ */
+void toStr(){
+	uint32_t temp = data;
+	for(int i = 0; i < 32; i++){
+		if(temp & 1){
+			data_str[i] = '1';
+		}else{
+			data_str[i] = '0';
+		}
+		temp = temp >> 1;
+	}
+}
+
+/**
+ * divides data by key to get remainder
+ *
+ * takes 4 bits at a time and XORs them until 4 bit remainder is left
+ */
+void division(){
+	int dividend_len = strlen(appended_data);
+	int xor_bits = 4;
+
+	strncpy(tmp, appended_data, xor_bits);
+
+	while(xor_bits < dividend_len){
+		if(tmp[0] == '1'){		//if leftmost bit is 1, perform xor with key
+			xor(key, tmp);
+			strncpy(tmp, result+1, 4);
+			strcat(tmp, &appended_data[xor_bits]);
+		}else{					//if leftmost bit is 0, perform xor with string of zeros
+			xor("0000", tmp);
+			strncpy(tmp, result+1, 4);
+			strcat(tmp, &appended_data[xor_bits]);
+		}
+		xor_bits++;
+	}
+
+	if(tmp[0] == '1'){
+		xor(key, tmp);
+		strcpy(tmp, result);
+	}else{
+		xor("0000", tmp);
+		strcpy(tmp, result);
+	}
+	strcpy(remain, tmp);
+}
+
+/**
+ * reverses string
+ */
+char* str_rev(char* str){
+	int len = strlen(str);
+	for(int i = 0, j = len - 1; i <= j; i++, j--){
+		char c = str[i];
+		str[i] = str[j];
+		str[j] = c;
+	}
+	return str;
+}
+
+/**
+ * encodes crc values and appends them to send
+ */
+void encode_crc(){
+	toStr();
+
+	//appends n-1 zeros to data
+	strcpy(appended_data, "000");
+	strcat(appended_data, data_str);
+	strcpy(appended_data, str_rev(appended_data));
+
+	division();
+
+	//appends data and remainder
+	char temp[10];
+	strcpy(send_data, str_rev(data_str));
+	strncpy(temp, remain+1, 4);
+	strcat(send_data, temp);
+
+	char *endptr;
+	TxData[0] = strtol(data_str, &endptr, 2);
+	TxData[1] = strtol(send_data, &endptr, 2);
+}
+
+/**
+ * sends data with crc every 10ms
+ */
+void sendData(){
+	encode_crc();
+
+	HAL_Delay(10);
+	HAL_UART_Transmit(&huart1, (uint8_t*)TxData, sizeof(TxData), 1000);
+}
+
+
 /* USER CODE END 0 */
 
 /**
@@ -139,7 +262,6 @@ int main(void)
   MX_TIM16_Init();
   MX_CRC_Init();
   /* USER CODE BEGIN 2 */
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -147,37 +269,35 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
-	 			  sendData();
-	 			  	  	  if(bitmask_check(0)) //red
-	 			 		  {
-	 			 		    TxData[0] = 1;
-	 			 		    sendData();
-	 			 		    TxData[0] = 0;
-	 			 		     bitmask_clear(0);
-	 			 		  }
-	 			  	  	  if(bitmask_check(1)) //green
-	 			 		  {
-	 			 		   TxData[0] = 2;
-	 			 		    sendData();
-	 			 		    TxData[0] = 0;
-	 			 		      bitmask_clear(1);
-	 			 		  }
-	 			  	  	  if(bitmask_check(2)) //yellow
-	 			 		 {
-	 			 		    TxData[0] = 3;
-	 			 		    sendData();
-	 			 		    TxData[0] = 0;
-	 			 		    bitmask_clear(2);
-	 			 		  }
-	 			  	    	if(bitmask_check(3)) //blue
-	 			 		  {
-	 			 		    TxData[0] = 4;
-	 			 		    sendData();
-	 			 		    TxData[0] = 0;
-	 			 		    bitmask_clear(3);
-	 			 		  }
-
+	  sendData();
+	  	  if(bitmask_check(0)) //red
+	  	  {
+	  		  data = 1;
+	  		  sendData();
+	  		  data = 0;
+	  		  bitmask_clear(0);
+	  	  }
+	  	  if(bitmask_check(1)) //green
+	  	  {
+	  		  data = 2;
+	  		  sendData();
+	  		  data = 0;
+	  		  bitmask_clear(1);
+	  	  }
+	  	  if(bitmask_check(2)) //yellow
+	  	  {
+	  		  data = 3;
+	  		  sendData();
+	  		  data = 0;
+	  		  bitmask_clear(2);
+	  	  }
+	  	  if(bitmask_check(3)) //blue
+	  	  {
+	  		  data = 4;
+	  		  sendData();
+	  		  data = 0;
+	  		  bitmask_clear(3);
+	  	  }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -247,12 +367,12 @@ static void MX_CRC_Init(void)
   hcrc.Instance = CRC;
   hcrc.Init.DefaultPolynomialUse = DEFAULT_POLYNOMIAL_DISABLE;
   hcrc.Init.DefaultInitValueUse = DEFAULT_INIT_VALUE_DISABLE;
-  hcrc.Init.GeneratingPolynomial = 7;
-  hcrc.Init.CRCLength = CRC_POLYLENGTH_8B;
-  hcrc.Init.InitValue = 0;
+  hcrc.Init.GeneratingPolynomial = 79764919;
+  hcrc.Init.CRCLength = CRC_POLYLENGTH_32B;
+  hcrc.Init.InitValue = 4294967295;
   hcrc.Init.InputDataInversionMode = CRC_INPUTDATA_INVERSION_NONE;
   hcrc.Init.OutputDataInversionMode = CRC_OUTPUTDATA_INVERSION_DISABLE;
-  hcrc.InputDataFormat = CRC_INPUTDATA_FORMAT_BYTES;
+  hcrc.InputDataFormat = CRC_INPUTDATA_FORMAT_WORDS;
   if (HAL_CRC_Init(&hcrc) != HAL_OK)
   {
     Error_Handler();
@@ -268,20 +388,21 @@ static void MX_CRC_Init(void)
   * @param None
   * @retval None
   */
-static void MX_TIM16_Init(void)			//	20ms trigger
+static void MX_TIM16_Init(void)
 {
 
   /* USER CODE BEGIN TIM16_Init 0 */
-
+		//f = 8Mhz / PSC = 50kHz
+		//T = (1 / f) * period = 20ms
   /* USER CODE END TIM16_Init 0 */
 
   /* USER CODE BEGIN TIM16_Init 1 */
 
   /* USER CODE END TIM16_Init 1 */
   htim16.Instance = TIM16;
-  htim16.Init.Prescaler = 1599;						//	f = 8MHz / PSC = 50kHz
+  htim16.Init.Prescaler = 159;
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 999;								//	T = (1 / f) * period = 20ms
+  htim16.Init.Period = 999;
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim16.Init.RepetitionCounter = 0;
   htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
