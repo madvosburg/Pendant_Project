@@ -21,8 +21,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stdio.h"
-#include "string.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,6 +43,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim16;
+
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
@@ -53,26 +57,172 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint8_t TxData[2];
-uint8_t RxData[2];
-uint32_t previousMillis = 0;
-uint32_t currentMillis = 0;
+volatile uint32_t TxData[3];
+uint32_t bit = 0;
+uint32_t data = 0;
 
-void sendData (uint8_t *data)
-{
-	HAL_UART_Transmit(&huart1, data, 1, 1000);
+typedef enum{
+  BUTTON_1,
+  BUTTON_2,
+  BUTTON_3,
+  BUTTON_4,
+  //could track up to 32 buttons
+  NONE_B
+}button_state;
+
+button_state button = NONE_B;
+GPIO_PinState state;
+
+char key[] = "1101";	//edit to implement with any size key? (crc code only works for 4 numbered keys)
+char data_str[40];
+char remain[5];
+char appended_data[40];
+char result[5];
+char send_data[40];
+char tmp[10];
+
+/**
+ * sets specific button pressed
+ */
+void bitmask_set(uint32_t bit_position){
+	bit |= (1 << bit_position);
 }
 
-//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
-//{
-//	HAL_UARTEx_ReceiveToIdle_IT(&huart1, RxData, 2);
-//}
+/**
+ * clears specific button pressed
+ */
+void bitmask_clear(uint32_t bit_position){
+	 bit &= ~(1 << bit_position);
+}
+
+/**
+ * checks if specific button is pressed
+ */
+uint8_t bitmask_check(uint32_t bit_position){
+	if(bit & (1 << bit_position)){
+		return 1;
+	}else{
+		return 0;
+	}
+}
+
+/**
+ * XOR logic used to divide data by key
+ */
+void xor(char* str1, char* str2){
+	for(int i = 0; i < 5; i++){
+		if(str1[i] == str2[i]){
+			result[i] = '0';			//if bits are same, XOR is 0
+		}else{
+			result[i] = '1';			//if bits are different, XOR is 1
+		}
+	}
+	result[4] = '\0';
+}
+
+/**
+ * converts uint32 to string
+ */
+void toStr(){
+	uint32_t temp = data;
+	for(int i = 0; i < 32; i++){
+		if(temp & 1){
+			data_str[i] = '1';
+		}else{
+			data_str[i] = '0';
+		}
+		temp = temp >> 1;
+	}
+}
+
+/**
+ * divides data by key to get remainder
+ *
+ * takes 4 bits at a time and XORs them until 4 bit remainder is left
+ */
+void division(){
+	int dividend_len = strlen(appended_data);
+	int xor_bits = 4;
+
+	strncpy(tmp, appended_data, xor_bits);
+
+	while(xor_bits < dividend_len){
+		if(tmp[0] == '1'){		//if leftmost bit is 1, perform xor with key
+			xor(key, tmp);
+			strncpy(tmp, result+1, 4);
+			strcat(tmp, &appended_data[xor_bits]);
+		}else{					//if leftmost bit is 0, perform xor with string of zeros
+			xor("0000", tmp);
+			strncpy(tmp, result+1, 4);
+			strcat(tmp, &appended_data[xor_bits]);
+		}
+		xor_bits++;
+	}
+
+	if(tmp[0] == '1'){
+		xor(key, tmp);
+		strcpy(tmp, result);
+	}else{
+		xor("0000", tmp);
+		strcpy(tmp, result);
+	}
+	strcpy(remain, tmp);
+}
+
+/**
+ * reverses string
+ */
+char* str_rev(char* str){
+	int len = strlen(str);
+	for(int i = 0, j = len - 1; i <= j; i++, j--){
+		char c = str[i];
+		str[i] = str[j];
+		str[j] = c;
+	}
+	return str;
+}
+
+/**
+ * encodes crc values and appends them to send
+ */
+void encode_crc(){
+	toStr();
+
+	//appends n-1 zeros to data
+	strcpy(appended_data, "000");
+	strcat(appended_data, data_str);
+	strcpy(appended_data, str_rev(appended_data));
+
+	division();
+
+	//appends data and remainder
+	char temp[10];
+	strcpy(send_data, str_rev(data_str));
+	strncpy(temp, remain+1, 4);
+	strcat(send_data, temp);
+
+	char *endptr;
+	TxData[0] = strtol(data_str, &endptr, 2);
+	TxData[1] = strtol(send_data, &endptr, 2);
+}
+
+/**
+ * sends data with crc every 10ms
+ */
+void sendData(){
+	encode_crc();
+
+	HAL_Delay(10);
+	HAL_UART_Transmit(&huart1, (uint8_t*)TxData, sizeof(TxData), 1000);
+}
+
 
 /* USER CODE END 0 */
 
@@ -106,9 +256,8 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
-
-//  HAL_UARTEx_ReceiveToIdle_IT(&huart1, RxData, 2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -118,6 +267,35 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  sendData();
+	  	  if(bitmask_check(0)) //red
+	  	  {
+	  		  data = 1;
+	  		  sendData();
+	  		  data = 0;
+	  		  bitmask_clear(0);
+	  	  }
+	  	  if(bitmask_check(1)) //green
+	  	  {
+	  		  data = 2;
+	  		  sendData();
+	  		  data = 0;
+	  		  bitmask_clear(1);
+	  	  }
+	  	  if(bitmask_check(2)) //yellow
+	  	  {
+	  		  data = 3;
+	  		  sendData();
+	  		  data = 0;
+	  		  bitmask_clear(2);
+	  	  }
+	  	  if(bitmask_check(3)) //blue
+	  	  {
+	  		  data = 4;
+	  		  sendData();
+	  		  data = 0;
+	  		  bitmask_clear(3);
+	  	  }
   }
   /* USER CODE END 3 */
 }
@@ -157,13 +335,48 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_USART2;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_USART2
+                              |RCC_PERIPHCLK_TIM16;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
+  PeriphClkInit.Tim16ClockSelection = RCC_TIM16CLK_HCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM16 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM16_Init(void)
+{
+
+  /* USER CODE BEGIN TIM16_Init 0 */
+		//f = 8Mhz / PSC = 50kHz
+		//T = (1 / f) * period = 20ms
+  /* USER CODE END TIM16_Init 0 */
+
+  /* USER CODE BEGIN TIM16_Init 1 */
+
+  /* USER CODE END TIM16_Init 1 */
+  htim16.Instance = TIM16;
+  htim16.Init.Prescaler = 159;
+  htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim16.Init.Period = 999;
+  htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim16.Init.RepetitionCounter = 0;
+  htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM16_Init 2 */
+
+  /* USER CODE END TIM16_Init 2 */
+
 }
 
 /**
@@ -252,9 +465,6 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(TX_EN_GPIO_Port, TX_EN_Pin, GPIO_PIN_RESET);
-
   /*Configure GPIO pins : PC2 PC3 */
   GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
@@ -266,13 +476,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : TX_EN_Pin */
-  GPIO_InitStruct.Pin = TX_EN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(TX_EN_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI2_TSC_IRQn, 0, 0);
@@ -291,40 +494,48 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  currentMillis = HAL_GetTick();
-  if (GPIO_Pin == GPIO_PIN_2 && (currentMillis - previousMillis > 50))
-  {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
-    TxData[0] = 1;
-    sendData(TxData);
-    previousMillis = currentMillis;
-    TxData[0] = 0;
+	  UNUSED(GPIO_Pin);
+
+  if (GPIO_Pin == GPIO_PIN_2){
+	  state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2);
+	  button = BUTTON_1;	//red
   }
-  if (GPIO_Pin == GPIO_PIN_3 && (currentMillis - previousMillis > 50))
-  {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
-    TxData[0] = 2;
-    sendData(TxData);
-    previousMillis = currentMillis;
-    TxData[0] = 0;
+  if (GPIO_Pin == GPIO_PIN_3){
+	  state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3);
+	  button = BUTTON_2;	//green
   }
-  if (GPIO_Pin == GPIO_PIN_14 && (currentMillis - previousMillis > 50))
-  {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
-    TxData[0] = 3;
-    sendData(TxData);
-    previousMillis = currentMillis;
-    TxData[0] = 0;
+  if (GPIO_Pin == GPIO_PIN_14){
+	  state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14);
+	  button = BUTTON_3;	//yellow
   }
-  if (GPIO_Pin == GPIO_PIN_15 && (currentMillis - previousMillis > 50))
-  {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
-    TxData[0] = 4;
-    sendData(TxData);
-    previousMillis = currentMillis;
-    TxData[0] = 0;
+  if (GPIO_Pin == GPIO_PIN_15){
+	  state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15);
+	  button = BUTTON_4;	//blue
   }
+  HAL_TIM_Base_Start_IT(&htim16);
+
 }
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	 UNUSED(htim);
+
+	if(htim == &htim16){
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == state && button == BUTTON_1){
+			bitmask_set(0);
+		}
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == state && button == BUTTON_2){
+			bitmask_set(1);
+		}
+		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == state && button == BUTTON_3){
+			bitmask_set(2);
+		}
+		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == state && button == BUTTON_4){
+			bitmask_set(3);
+		}
+	}
+	HAL_TIM_Base_Stop_IT(&htim16);
+}
+
 /* USER CODE END 4 */
 
 /**
