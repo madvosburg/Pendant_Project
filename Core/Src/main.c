@@ -64,9 +64,16 @@ static void MX_TIM16_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-volatile uint32_t TxData[3];
+volatile uint64_t TxData[3];
 uint32_t bit = 0;
-uint32_t data = 0;
+
+uint64_t bit_data = 0;
+uint64_t bit_key = 0xD;
+uint64_t bit_appended;
+int shift = 60;
+int pos = 0;
+uint64_t bit_four = 0;
+uint64_t bit_ans = 0;
 
 typedef enum{
   BUTTON_1,
@@ -79,14 +86,6 @@ typedef enum{
 
 button_state button = NONE_B;
 GPIO_PinState state;
-
-char key[] = "1101";	//edit to implement with any size key? (crc code only works for 4 numbered keys)
-char data_str[40];
-char remain[5];
-char appended_data[40];
-char result[5];
-char send_data[40];
-char tmp[10];
 
 /**
  * sets specific button pressed
@@ -114,31 +113,20 @@ uint8_t bitmask_check(uint32_t bit_position){
 }
 
 /**
- * XOR logic used to divide data by key
+ * appends 3 zeros to end of data to prepare for division
  */
-void xor(char* str1, char* str2){
-	for(int i = 0; i < 5; i++){
-		if(str1[i] == str2[i]){
-			result[i] = '0';			//if bits are same, XOR is 0
-		}else{
-			result[i] = '1';			//if bits are different, XOR is 1
-		}
-	}
-	result[4] = '\0';
+void append_zeros(){
+	bit_appended = bit_data << 3;
 }
 
 /**
- * converts uint32 to string
+ * XOR logic used to divide data by key
  */
-void toStr(){
-	uint32_t temp = data;
-	for(int i = 0; i < 32; i++){
-		if(temp & 1){
-			data_str[i] = '1';
-		}else{
-			data_str[i] = '0';
-		}
-		temp = temp >> 1;
+void xor(){
+	if(bit_ans & 0b1000){			//if leftmost bit is 1, perform xor with key
+		bit_ans = bit_ans ^ bit_key;
+	}else{						//if leftmost bit is 0, perform xor with all zeros
+		bit_ans = bit_ans ^ 0b0000;
 	}
 }
 
@@ -147,77 +135,39 @@ void toStr(){
  *
  * takes 4 bits at a time and XORs them until 4 bit remainder is left
  */
-void division(){
-	int dividend_len = strlen(appended_data);
-	int xor_bits = 4;
-
-	strncpy(tmp, appended_data, xor_bits);
-
-	while(xor_bits < dividend_len){
-		if(tmp[0] == '1'){		//if leftmost bit is 1, perform xor with key
-			xor(key, tmp);
-			strncpy(tmp, result+1, 4);
-			strcat(tmp, &appended_data[xor_bits]);
-		}else{					//if leftmost bit is 0, perform xor with string of zeros
-			xor("0000", tmp);
-			strncpy(tmp, result+1, 4);
-			strcat(tmp, &appended_data[xor_bits]);
-		}
-		xor_bits++;
+void bitmask_division(){
+	while(shift > 0){
+		shift--;
+		bit_four = bit_appended & (0x0800000000000000 >> pos);
+		bit_four = bit_four >> shift;
+		bit_ans = bit_ans << 1;
+		bit_ans = bit_ans + bit_four;
+		xor();
+		pos++;
 	}
-
-	if(tmp[0] == '1'){
-		xor(key, tmp);
-		strcpy(tmp, result);
-	}else{
-		xor("0000", tmp);
-		strcpy(tmp, result);
-	}
-	strcpy(remain, tmp);
+	shift = 60;
+	pos = 0;
 }
 
 /**
- * reverses string
+ * initializes values for division and carries out the encoding of each crc value
  */
-char* str_rev(char* str){
-	int len = strlen(str);
-	for(int i = 0, j = len - 1; i <= j; i++, j--){
-		char c = str[i];
-		str[i] = str[j];
-		str[j] = c;
-	}
-	return str;
-}
-
-/**
- * encodes crc values and appends them to send
- */
-void encode_crc(){
-	toStr();
-
-	//appends n-1 zeros to data
-	strcpy(appended_data, "000");
-	strcat(appended_data, data_str);
-	strcpy(appended_data, str_rev(appended_data));
-
-	division();
-
-	//appends data and remainder
-	char temp[10];
-	strcpy(send_data, str_rev(data_str));
-	strncpy(temp, remain+1, 4);
-	strcat(send_data, temp);
-
-	char *endptr;
-	TxData[0] = strtol(data_str, &endptr, 2);
-	TxData[1] = strtol(send_data, &endptr, 2);
+void bitmask_encode(){
+	append_zeros();
+	bit_four = bit_appended & 0xF000000000000000;
+	bit_four = bit_four >> shift;
+	bit_ans = bit_four;
+	xor();
+	bitmask_division();
+	TxData[0] = bit_data;
+	TxData[1] = bit_appended + bit_ans;
 }
 
 /**
  * sends data with crc every 10ms
  */
-void sendData(){
-	encode_crc();
+void send(){
+	bitmask_encode();
 
 	HAL_Delay(10);
 	HAL_UART_Transmit(&huart1, (uint8_t*)TxData, sizeof(TxData), 1000);
@@ -267,34 +217,35 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  sendData();
+	  //sendData();
+	  send();
 	  	  if(bitmask_check(0)) //red
 	  	  {
-	  		  data = 1;
-	  		  sendData();
-	  		  data = 0;
+	  		  bit_data = 1;
+	  		  send();
+	  		  bit_data = 0;
 	  		  bitmask_clear(0);
 	  	  }
 	  	  if(bitmask_check(1)) //green
 	  	  {
-	  		  data = 2;
-	  		  sendData();
-	  		  data = 0;
+	  		  bit_data = 2;
+	  		  send();
+	  		  bit_data = 0;
 	  		  bitmask_clear(1);
 	  	  }
 	  	  if(bitmask_check(2)) //yellow
 	  	  {
-	  		  data = 3;
-	  		  sendData();
-	  		  data = 0;
+	  		  bit_data = 3;
+	  		  send();
+	  		  bit_data = 0;
 	  		  bitmask_clear(2);
 	  	  }
 	  	  if(bitmask_check(3)) //blue
 	  	  {
-	  		  data = 4;
-	  		  sendData();
-	  		  data = 0;
-	  		  bitmask_clear(3);
+			  bit_data = 4;
+			  send();
+			  bit_data = 0;
+			  bitmask_clear(3);
 	  	  }
   }
   /* USER CODE END 3 */
