@@ -48,6 +48,8 @@ TIM_HandleTypeDef htim16;
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
+WWDG_HandleTypeDef hwwdg;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -58,6 +60,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM16_Init(void);
+static void MX_WWDG_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -67,13 +70,8 @@ static void MX_TIM16_Init(void);
 volatile uint64_t TxData[3];
 uint32_t bit = 0;
 
-uint64_t bit_data = 0;
-uint64_t bit_key = 0xD;
-uint64_t bit_appended;
-int shift = 60;
-int pos = 0;
-uint64_t bit_four = 0;
-uint64_t bit_ans = 0;
+uint64_t data = 0;
+uint64_t crc_key = 0xD;
 
 typedef enum{
   BUTTON_1,
@@ -115,61 +113,69 @@ uint8_t bitmask_check(uint32_t bit_position){
 /**
  * appends 3 zeros to end of data to prepare for division
  */
-void append_zeros(){
-	bit_appended = bit_data << 3;
+uint64_t crc_append(uint64_t crc_data){
+	return crc_data << 3;
 }
 
 /**
  * XOR logic used to divide data by key
  */
-void xor(){
-	if(bit_ans & 0b1000){			//if leftmost bit is 1, perform xor with key
-		bit_ans = bit_ans ^ bit_key;
-	}else{						//if leftmost bit is 0, perform xor with all zeros
-		bit_ans = bit_ans ^ 0b0000;
+uint64_t crc_xor(uint64_t div_data){
+	uint64_t ans = div_data;
+	if(ans & 0b1000){
+		ans = ans ^ crc_key;		//if leftmost bit is 1, perform xor with key
+	}else{
+		ans = ans ^ 0b0000;			//if leftmost bit is 0, perform xor with all zeros
 	}
+	return ans;
 }
-
 /**
  * divides data by key to get remainder
  *
  * takes 4 bits at a time and XORs them until 4 bit remainder is left
  */
-void bitmask_division(){
-	while(shift > 0){
-		shift--;
-		bit_four = bit_appended & (0x0800000000000000 >> pos);
-		bit_four = bit_four >> shift;
-		bit_ans = bit_ans << 1;
-		bit_ans = bit_ans + bit_four;
-		xor();
-		pos++;
+uint64_t crc_division(uint64_t data, int curs_pos, int shift_pos, uint64_t answer){
+	int cursor = curs_pos;
+	int bit_shift = shift_pos;
+	uint64_t remain = answer;
+	uint64_t dividend = 0;
+
+	while(bit_shift > 0){
+		bit_shift--;
+		dividend = data & (0x0800000000000000 >> cursor);
+		dividend = dividend >> bit_shift;
+		remain = remain << 1;
+		remain += dividend;
+		remain = crc_xor(remain);
+		cursor++;
 	}
-	shift = 60;
-	pos = 0;
+	return remain;
 }
 
 /**
  * initializes values for division and carries out the encoding of each crc value
  */
-void bitmask_encode(){
-	append_zeros();
-	bit_four = bit_appended & 0xF000000000000000;
-	bit_four = bit_four >> shift;
-	bit_ans = bit_four;
-	xor();
-	bitmask_division();
-	TxData[0] = bit_data;
-	TxData[1] = bit_appended + bit_ans;
+void crc_encode(){
+	int shift = 60;
+	int position = 0;
+	uint64_t appended_data = crc_append(data);
+	uint64_t dividend = appended_data & 0xF000000000000000;
+	dividend = dividend >> shift;
+	uint64_t ans = crc_xor(dividend);
+
+	uint64_t remain = crc_division(appended_data, position, shift, ans);
+	TxData[0] = data;
+	TxData[1] = appended_data + remain;
 }
 
 /**
- * sends data with crc every 10ms
+ * sends data with crc to receiver every 10ms
  */
-void send(){
-	bitmask_encode();
+void sendData(){
+	crc_encode();
 
 	HAL_Delay(10);
+	HAL_WWDG_Refresh(&hwwdg);		//transmitting timeout
 	HAL_UART_Transmit(&huart1, (uint8_t*)TxData, sizeof(TxData), 1000);
 }
 
@@ -207,6 +213,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   MX_TIM16_Init();
+  MX_WWDG_Init();
   /* USER CODE BEGIN 2 */
   /* USER CODE END 2 */
 
@@ -217,34 +224,33 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  //sendData();
-	  send();
+	  	  sendData();
 	  	  if(bitmask_check(0)) //red
 	  	  {
-	  		  bit_data = 1;
-	  		  send();
-	  		  bit_data = 0;
+	  		  data = 1;
+	  		  sendData();
+	  		  data = 0;
 	  		  bitmask_clear(0);
 	  	  }
 	  	  if(bitmask_check(1)) //green
 	  	  {
-	  		  bit_data = 2;
-	  		  send();
-	  		  bit_data = 0;
+	  		  data = 2;
+	  		  sendData();
+	  		  data = 0;
 	  		  bitmask_clear(1);
 	  	  }
 	  	  if(bitmask_check(2)) //yellow
 	  	  {
-	  		  bit_data = 3;
-	  		  send();
-	  		  bit_data = 0;
+	  		  data = 3;
+	  		  sendData();
+	  		  data = 0;
 	  		  bitmask_clear(2);
 	  	  }
 	  	  if(bitmask_check(3)) //blue
 	  	  {
-			  bit_data = 4;
-			  send();
-			  bit_data = 0;
+			  data = 4;
+			  sendData();
+			  data = 0;
 			  bitmask_clear(3);
 	  	  }
   }
@@ -397,6 +403,37 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * @brief WWDG Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_WWDG_Init(void)
+{
+
+  /* USER CODE BEGIN WWDG_Init 0 */
+	//watch dog counter for window of 5 to 15 ms
+  /* USER CODE END WWDG_Init 0 */
+
+  /* USER CODE BEGIN WWDG_Init 1 */
+	//counter = ((max_time * clk) / (4096 * prescalar)) + 64			= ((.015 * 8M) / (4096 * 4)) + 64 = 72
+	//window = counter - ((min_time * clk) / (4096 * prescalar))		= 72 - ((0.005 * 8M) / (4096 * prescalar)) = 70
+  /* USER CODE END WWDG_Init 1 */
+  hwwdg.Instance = WWDG;
+  hwwdg.Init.Prescaler = WWDG_PRESCALER_4;
+  hwwdg.Init.Window = 70;
+  hwwdg.Init.Counter = 72;
+  hwwdg.Init.EWIMode = WWDG_EWI_DISABLE;
+  if (HAL_WWDG_Init(&hwwdg) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN WWDG_Init 2 */
+
+  /* USER CODE END WWDG_Init 2 */
 
 }
 
