@@ -79,31 +79,9 @@ volatile uint64_t TxData[3];
 uint32_t bit = 0;
 uint64_t data = 0;
 uint64_t crc_key = 0xD;
-
 uint32_t button_flag = 0;
-uint32_t previous_millis = 0;
-uint32_t current_millis = 0;
 bool timer_flag = false;
 bool wwdg_flag = false;
-
-
-//uint32_t bitmask_set(uint32_t bit_set, uint32_t bit_position){
-//	uint32_t result = bit_set | (1 << bit_position);
-//	return result;
-//}
-//
-//uint32_t bitmask_clear(uint32_t bit_clear, uint32_t bit_position){
-//	uint32_t result = bit_clear & ~(1 << bit_position);
-//	return result;
-//}
-//
-//uint32_t bitmask_check(uint32_t bit_check, uint32_t bit_position){
-//	if(bit_check & (1 << bit_position)){
-//		return 1;
-//	}else{
-//		return 0;
-//	}
-//}
 
 /**
  * appends 3 zeros to end of data to prepare for division
@@ -227,43 +205,38 @@ int main(void)
 			wwdg_flag = false;
 		}
 
-		current_millis = HAL_GetTick();
 
-		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == 0 && (current_millis - previous_millis > 150))
+		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == 0)
 		{
 			data = LED1_ON;
 			sendData();
-			previous_millis = current_millis;
 		}else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == 1){
 			data = LED1_OFF;
 			sendData();
 		}
 
-		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == 0 && (current_millis - previous_millis > 150))
+		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == 0)
 		{
 			data = LED2_ON;
 			sendData();
-			previous_millis = current_millis;
 		}else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == 1){
 			data = LED2_OFF;
 			sendData();
 		}
 
-		if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == 0 && (current_millis - previous_millis > 150))
+		if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == 0)
 		{
 			data = LED3_ON;
 			sendData();
-			previous_millis = current_millis;
 		}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == 1){
 			data = LED3_OFF;
 			sendData();
 		}
 
-		if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == 0 && (current_millis - previous_millis > 150))
+		if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == 0)
 		{
 			data = LED4_ON;
 			sendData();
-			previous_millis = current_millis;
 		}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == 1){
 			data = LED4_OFF;
 			sendData();
