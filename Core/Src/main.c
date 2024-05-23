@@ -42,7 +42,7 @@
 #define LED3_OFF 6
 #define LED4_ON 7
 #define LED4_OFF 8
-	//could track up to 30 buttons (both on and off states)
+//could track up to 30 buttons (both on and off states)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -81,7 +81,6 @@ uint64_t data = 0;
 uint64_t crc_key = 0xD;
 uint32_t button_flag = 0;
 bool timer_flag = false;
-bool wwdg_flag = false;
 
 /**
  * appends 3 zeros to end of data to prepare for division
@@ -190,7 +189,8 @@ int main(void)
 	MX_TIM16_Init();
 
 	/* USER CODE BEGIN 2 */
-	HAL_TIM_Base_Start_IT(&htim16);
+	//enable timer counter
+	TIM16->CR1 |= TIM_CR1_CEN;
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -200,11 +200,14 @@ int main(void)
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
-		if(wwdg_flag){
+		//if interrupt is called, enable watchdog
+		if((TIM16->SR & TIM_SR_UIF) == 1){
+			//clear update interrupt flag
+			TIM16->SR &= ~TIM_SR_UIF;
+			//disable timer counter
+			TIM16->CR1 &= ~TIM_CR1_CEN;
 			MX_WWDG_Init();
-			wwdg_flag = false;
 		}
-
 
 		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == 0)
 		{
@@ -241,8 +244,6 @@ int main(void)
 			data = LED4_OFF;
 			sendData();
 		}
-
-
 	}
 	/* USER CODE END 3 */
 }
@@ -321,7 +322,10 @@ static void MX_TIM16_Init(void)
 		Error_Handler();
 	}
 	/* USER CODE BEGIN TIM16_Init 2 */
-
+	//generate update event to reload psc
+	TIM16->EGR = TIM_EGR_UG;
+	//clear update interrupt flag
+	TIM16->SR &= ~TIM_SR_UIF;
 	/* USER CODE END TIM16_Init 2 */
 
 }
@@ -470,15 +474,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	 UNUSED(htim);
 
-	if(htim == &htim16){
-		timer_flag = true;
-		wwdg_flag = true;
-		HAL_TIM_Base_Stop_IT(&htim16);
-	}
-}
 /* USER CODE END 4 */
 
 /**
