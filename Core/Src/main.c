@@ -78,9 +78,18 @@ volatile uint64_t TxData[3];
 uint32_t bit = 0;
 uint64_t data = 0;
 uint64_t crc_key = 0xD;
-uint32_t button_flag = 0;
 bool timer_flag = false;
 
+uint8_t led1_msg[20] = "LED1 ON\n\r";
+uint8_t led2_msg[20] = "LED2 ON\n\r";
+uint8_t led3_msg[20] = "LED3 ON\n\r";
+uint8_t led4_msg[20] = "LED4 ON\n\r";
+uint8_t led1 = 0;
+uint8_t led2 = 0;
+uint8_t led3 = 0;
+uint8_t led4 = 0;
+char count_msg[100];
+uint8_t wwdg_msg[20] = "Watchdog reset\n\r";
 /**
  * appends 3 zeros to end of data to prepare for division
  */
@@ -202,12 +211,15 @@ int main(void)
 			LL_TIM_DisableCounter(TIM16);
 			MX_WWDG_Init();
 			timer_flag = true;
+			HAL_UART_Transmit(&huart2, wwdg_msg, 20, 10);
 		}
 
 		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == 0)
 		{
 			data = LED1_ON;
 			sendData();
+			HAL_UART_Transmit(&huart2, led1_msg, 20, 10);
+			led1++;
 		}else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == 1){
 			data = LED1_OFF;
 			sendData();
@@ -217,6 +229,8 @@ int main(void)
 		{
 			data = LED2_ON;
 			sendData();
+			HAL_UART_Transmit(&huart2, led2_msg, 20, 10);
+			led2++;
 		}else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == 1){
 			data = LED2_OFF;
 			sendData();
@@ -226,6 +240,8 @@ int main(void)
 		{
 			data = LED3_ON;
 			sendData();
+			HAL_UART_Transmit(&huart2, led3_msg, 20, 10);
+			led3++;
 		}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == 1){
 			data = LED3_OFF;
 			sendData();
@@ -235,9 +251,20 @@ int main(void)
 		{
 			data = LED4_ON;
 			sendData();
+			HAL_UART_Transmit(&huart2, led4_msg, 20, 10);
+			led4++;
 		}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == 1){
 			data = LED4_OFF;
 			sendData();
+		}
+
+		//in testing mode, press test button to display button counts on putty
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == 0){		//test button = user button on stm32
+			data = 100;
+			sendData();
+			sprintf(count_msg, "\n\rCounts:     LED1 = %u, LED2 = %u, LED3 = %u, LED4 = %u \n\r", led1, led2, led3, led4);
+			HAL_UART_Transmit(&huart2, (uint8_t*)count_msg, 100, 10);
+			HAL_WWDG_Refresh(&hwwdg);
 		}
 	}
   /* USER CODE END 3 */
@@ -415,6 +442,7 @@ static void MX_WWDG_Init(void)
   /* USER CODE BEGIN WWDG_Init 1 */
 	//counter = ((max_time * clk) / (4096 * prescalar)) + 64			= ((.015 * 8M) / (4096 * 4)) + 64 = 72
 	//window = counter - ((min_time * clk) / (4096 * prescalar))		= 72 - ((0.005 * 8M) / (4096 * prescalar)) = 70
+	//5-15ms window for watchdog reset
   /* USER CODE END WWDG_Init 1 */
   hwwdg.Instance = WWDG;
   hwwdg.Init.Prescaler = WWDG_PRESCALER_4;
@@ -446,6 +474,12 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PC2 PC3 */
   GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
