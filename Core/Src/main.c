@@ -34,15 +34,17 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define LED1_ON 1
-#define LED1_OFF 2
-#define LED2_ON 3
-#define LED2_OFF 4
-#define LED3_ON 5
-#define LED3_OFF 6
-#define LED4_ON 7
-#define LED4_OFF 8
-//could track up to 30 buttons (both on and off states)
+
+//button states
+#define RELAY1_ON 1
+#define RELAY1_OFF 2
+#define RELAY2_ON 3
+#define RELAY2_OFF 4
+#define RELAY3_ON 5
+#define RELAY3_OFF 6
+#define RELAY4_ON 7
+#define RELAY4_OFF 8
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -74,22 +76,27 @@ static void MX_WWDG_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
 volatile uint64_t TxData[3];
 uint32_t bit = 0;
 uint64_t data = 0;
 uint64_t crc_key = 0xD;
 bool timer_flag = false;
 
-uint8_t led1_msg[20] = "LED1 ON\n\r";
-uint8_t led2_msg[20] = "LED2 ON\n\r";
-uint8_t led3_msg[20] = "LED3 ON\n\r";
-uint8_t led4_msg[20] = "LED4 ON\n\r";
-uint8_t led1 = 0;
-uint8_t led2 = 0;
-uint8_t led3 = 0;
-uint8_t led4 = 0;
-char count_msg[100];
-uint8_t wwdg_msg[20] = "Watchdog reset\n\r";
+//counts used for testing
+uint32_t relay1_count = 0;
+uint32_t relay2_count = 0;
+uint32_t relay3_count = 0;
+uint32_t relay4_count = 0;
+
+//UART messages to communicate updates
+uint8_t relay1_msg[20] = "RELAY1 ON\n\r";
+uint8_t relay2_msg[20] = "RELAY2 ON\n\r";
+uint8_t relay3_msg[20] = "RELAY3 ON\n\r";
+uint8_t relay4_msg[20] = "RELAY4 ON\n\r";
+uint8_t wwdg_msg[20] = "Watchdog init\n\r";
+
+
 /**
  * appends 3 zeros to end of data to prepare for division
  */
@@ -151,7 +158,7 @@ void crc_encode(){
 /**
  * sends data with crc to receiver every 10ms
  */
-void sendData(){
+void send_data(){
 	crc_encode();
 
 	HAL_Delay(10);
@@ -160,7 +167,6 @@ void sendData(){
 	}
 	HAL_UART_Transmit(&huart1, (uint8_t*)TxData, sizeof(TxData), 1000);
 }
-
 
 /* USER CODE END 0 */
 
@@ -195,6 +201,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   MX_TIM16_Init();
+
   /* USER CODE BEGIN 2 */
   LL_TIM_EnableCounter(TIM16);
   /* USER CODE END 2 */
@@ -206,6 +213,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+		//watchdog calibration
 		if(LL_TIM_IsActiveFlag_UPDATE(TIM16)){
 			LL_TIM_ClearFlag_UPDATE(TIM16);
 			LL_TIM_DisableCounter(TIM16);
@@ -214,59 +223,52 @@ int main(void)
 			HAL_UART_Transmit(&huart2, wwdg_msg, 20, 10);
 		}
 
+		//button logic
 		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == 0)
 		{
-			data = LED1_ON;
-			sendData();
-			HAL_UART_Transmit(&huart2, led1_msg, 20, 10);
-			led1++;
+			data = RELAY1_ON;
+			send_data();
+			HAL_UART_Transmit(&huart2, relay1_msg, 20, 10);
+			relay1_count++;
 		}else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == 1){
-			data = LED1_OFF;
-			sendData();
+			data = RELAY1_OFF;
+			send_data();
 		}
 
 		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == 0)
 		{
-			data = LED2_ON;
-			sendData();
-			HAL_UART_Transmit(&huart2, led2_msg, 20, 10);
-			led2++;
+			data = RELAY2_ON;
+			send_data();
+			HAL_UART_Transmit(&huart2, relay2_msg, 20, 10);
+			relay2_count++;
 		}else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == 1){
-			data = LED2_OFF;
-			sendData();
+			data = RELAY2_OFF;
+			send_data();
 		}
 
 		if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == 0)
 		{
-			data = LED3_ON;
-			sendData();
-			HAL_UART_Transmit(&huart2, led3_msg, 20, 10);
-			led3++;
+			data = RELAY3_ON;
+			send_data();
+			HAL_UART_Transmit(&huart2, relay3_msg, 20, 10);
+			relay3_count++;
 		}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == 1){
-			data = LED3_OFF;
-			sendData();
+			data = RELAY3_OFF;
+			send_data();
 		}
 
 		if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == 0)
 		{
-			data = LED4_ON;
-			sendData();
-			HAL_UART_Transmit(&huart2, led4_msg, 20, 10);
-			led4++;
+			data = RELAY4_ON;
+			send_data();
+			HAL_UART_Transmit(&huart2, relay4_msg, 20, 10);
+			relay4_count++;
 		}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == 1){
-			data = LED4_OFF;
-			sendData();
-		}
-
-		//in testing mode, press test button to display button counts on putty
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == 0){		//test button = user button on stm32
-			data = 100;
-			sendData();
-			sprintf(count_msg, "\n\rCounts:     LED1 = %u, LED2 = %u, LED3 = %u, LED4 = %u \n\r", led1, led2, led3, led4);
-			HAL_UART_Transmit(&huart2, (uint8_t*)count_msg, 100, 10);
-			HAL_WWDG_Refresh(&hwwdg);
+			data = RELAY4_OFF;
+			send_data();
 		}
 	}
+
   /* USER CODE END 3 */
 }
 
@@ -474,12 +476,6 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin : PC13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PC2 PC3 */
   GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
