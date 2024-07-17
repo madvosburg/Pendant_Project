@@ -167,7 +167,6 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   MX_TIM16_Init();
-
   /* USER CODE BEGIN 2 */
   LL_TIM_EnableCounter(TIM16);
   /* USER CODE END 2 */
@@ -196,7 +195,6 @@ int main(void)
 			send_data();
 			HAL_UART_Transmit(&huart2, relay1_msg, 20, 10);
 			relay1_count++;
-			flash_write(RELAY1_ADDRESS, relay1_count, timer_flag, &hwwdg);
 		}else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == 1){
 			data = RELAY1_OFF;
 			send_data();
@@ -208,7 +206,6 @@ int main(void)
 			send_data();
 			HAL_UART_Transmit(&huart2, relay2_msg, 20, 10);
 			relay2_count++;
-			flash_write(RELAY2_ADDRESS, relay2_count, timer_flag, &hwwdg);
 		}else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == 1){
 			data = RELAY2_OFF;
 			send_data();
@@ -220,7 +217,6 @@ int main(void)
 			send_data();
 			HAL_UART_Transmit(&huart2, relay3_msg, 20, 10);
 			relay3_count++;
-			flash_write(RELAY3_ADDRESS, relay3_count, timer_flag, &hwwdg);
 		}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == 1){
 			data = RELAY3_OFF;
 			send_data();
@@ -232,7 +228,6 @@ int main(void)
 			send_data();
 			HAL_UART_Transmit(&huart2, relay4_msg, 20, 10);
 			relay4_count++;
-			flash_write(RELAY4_ADDRESS, relay4_count, timer_flag, &hwwdg);
 		}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == 1){
 			data = RELAY4_OFF;
 			send_data();
@@ -313,9 +308,9 @@ static void MX_TIM16_Init(void)
   /* USER CODE BEGIN TIM16_Init 1 */
 
   /* USER CODE END TIM16_Init 1 */
-  TIM_InitStruct.Prescaler = 159;
+  TIM_InitStruct.Prescaler = 367;
   TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_UP;
-  TIM_InitStruct.Autoreload = 999;
+  TIM_InitStruct.Autoreload = 65216;
   TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
   TIM_InitStruct.RepetitionCounter = 0;
   LL_TIM_Init(TIM16, &TIM_InitStruct);
@@ -412,14 +407,13 @@ static void MX_WWDG_Init(void)
   /* USER CODE END WWDG_Init 0 */
 
   /* USER CODE BEGIN WWDG_Init 1 */
-	//counter = ((max_time * clk) / (4096 * prescalar)) + 64			= ((.015 * 8M) / (4096 * 4)) + 64 = 79
-	//window = counter - ((min_time * clk) / (4096 * prescalar))		= 72 - ((0.005 * 8M) / (4096 * 4)) = 77
-	//5-30ms window for watchdog reset
+	//counter = ((max_time * clk) / (4096 * prescalar)) + 64			= ((0.015 * 8M) / (4096 * 4)) + 64 = 72
+	//window = counter - ((min_time * clk) / (4096 * prescalar))		= 72 - ((0.005 * 8M) / (4096 * 4)) = 70
   /* USER CODE END WWDG_Init 1 */
   hwwdg.Instance = WWDG;
   hwwdg.Init.Prescaler = WWDG_PRESCALER_4;
-  hwwdg.Init.Window = 77;
-  hwwdg.Init.Counter = 79;
+  hwwdg.Init.Window = 70;
+  hwwdg.Init.Counter = 72;
   hwwdg.Init.EWIMode = WWDG_EWI_DISABLE;
   if (HAL_WWDG_Init(&hwwdg) != HAL_OK)
   {
