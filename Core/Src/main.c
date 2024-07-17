@@ -21,6 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "flash_driver.h"
+#include "crc_driver.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -87,7 +90,6 @@ static void MX_WWDG_Init(void);
 volatile uint64_t TxData[3];
 uint32_t bit = 0;
 uint64_t data = 0;
-uint64_t crc_key = 0xD;
 bool timer_flag = false;
 
 //counts used for testing
@@ -102,49 +104,6 @@ uint8_t relay2_msg[20] = "RELAY2 ON\n\r";
 uint8_t relay3_msg[20] = "RELAY3 ON\n\r";
 uint8_t relay4_msg[20] = "RELAY4 ON\n\r";
 uint8_t wwdg_msg[20] = "Watchdog init\n\r";
-
-
-/**
- * appends 3 zeros to end of data to prepare for division
- */
-uint64_t crc_append(uint64_t crc_data){
-	return crc_data << 3;
-}
-
-/**
- * XOR logic used to divide data by key
- */
-uint64_t crc_xor(uint64_t div_data){
-	uint64_t ans = div_data;
-	if(ans & 0b1000){
-		ans = ans ^ crc_key;		//if leftmost bit is 1, perform xor with key
-	}else{
-		ans = ans ^ 0b0000;			//if leftmost bit is 0, perform xor with all zeros
-	}
-	return ans;
-}
-/**
- * divides data by key to get remainder
- *
- * takes 4 bits at a time and XORs them until 4 bit remainder is left
- */
-uint64_t crc_division(uint64_t data, int curs_pos, int shift_pos, uint64_t answer){
-	int cursor = curs_pos;
-	int bit_shift = shift_pos;
-	uint64_t remain = answer;
-	uint64_t dividend = 0;
-
-	while(bit_shift > 0){
-		bit_shift--;
-		dividend = data & (0x0800000000000000 >> cursor);
-		dividend = dividend >> bit_shift;
-		remain = remain << 1;
-		remain += dividend;
-		remain = crc_xor(remain);
-		cursor++;
-	}
-	return remain;
-}
 
 /**
  * initializes values for division and carries out the encoding of each crc value
@@ -173,34 +132,6 @@ void send_data(){
 		HAL_WWDG_Refresh(&hwwdg);		//transmitting timeout
 	}
 	HAL_UART_Transmit(&huart1, (uint8_t*)TxData, sizeof(TxData), 1000);
-}
-
-/**
-* writes button press counts to flash memory
-*/
-void flash_write(uint32_t address, uint32_t data){
-	HAL_FLASH_Unlock();
-
-	FLASH_EraseInitTypeDef FLASH_EraseInitStruct = {0};
-	FLASH_EraseInitStruct.TypeErase = FLASH_TYPEERASE_PAGES;
-	FLASH_EraseInitStruct.PageAddress = address;
-	FLASH_EraseInitStruct.NbPages = 1;
-	uint32_t PageError;
-	HAL_FLASHEx_Erase(&FLASH_EraseInitStruct, &PageError);
-
-	if(timer_flag){
-		HAL_WWDG_Refresh(&hwwdg);
-	}
-
-	HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, (uint64_t)data);
-	HAL_FLASH_Lock();
-}
-
-/**
-* reads button press counts from flash memory
-*/
-uint32_t flash_read(uint32_t address){
-	return *(uint32_t*)address;
 }
 
 /* USER CODE END 0 */
@@ -265,7 +196,7 @@ int main(void)
 			send_data();
 			HAL_UART_Transmit(&huart2, relay1_msg, 20, 10);
 			relay1_count++;
-			flash_write(RELAY1_ADDRESS, relay1_count);
+			flash_write(RELAY1_ADDRESS, relay1_count, timer_flag, &hwwdg);
 		}else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_2) == 1){
 			data = RELAY1_OFF;
 			send_data();
@@ -277,7 +208,7 @@ int main(void)
 			send_data();
 			HAL_UART_Transmit(&huart2, relay2_msg, 20, 10);
 			relay2_count++;
-			flash_write(RELAY2_ADDRESS, relay2_count);
+			flash_write(RELAY2_ADDRESS, relay2_count, timer_flag, &hwwdg);
 		}else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_3) == 1){
 			data = RELAY2_OFF;
 			send_data();
@@ -289,7 +220,7 @@ int main(void)
 			send_data();
 			HAL_UART_Transmit(&huart2, relay3_msg, 20, 10);
 			relay3_count++;
-			flash_write(RELAY3_ADDRESS, relay3_count);
+			flash_write(RELAY3_ADDRESS, relay3_count, timer_flag, &hwwdg);
 		}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == 1){
 			data = RELAY3_OFF;
 			send_data();
@@ -301,7 +232,7 @@ int main(void)
 			send_data();
 			HAL_UART_Transmit(&huart2, relay4_msg, 20, 10);
 			relay4_count++;
-			flash_write(RELAY4_ADDRESS, relay4_count);
+			flash_write(RELAY4_ADDRESS, relay4_count, timer_flag, &hwwdg);
 		}else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == 1){
 			data = RELAY4_OFF;
 			send_data();
